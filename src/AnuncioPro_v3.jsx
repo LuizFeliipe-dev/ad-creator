@@ -1050,35 +1050,71 @@ function StepAd({ data, onBack, onRestart }) {
     }, 300);
 
     const mp = MARKETPLACES[data.marketplace];
-    const prompt = `Você é um especialista em copywriting para marketplaces brasileiros com foco em conversão.
+    const prompt = `Você é um redator especialista em vendas online no Brasil, com anos de experiência criando anúncios de alta conversão para ${mp.name}. Você escreve como um vendedor experiente que conhece o cliente — não como uma IA gerando texto genérico.
 
-Crie um anúncio completo para o seguinte produto:
+Seu estilo é: direto, natural, humano, com personalidade. Usa a língua portuguesa do Brasil do jeito que as pessoas falam no dia a dia. Não exagera nos adjetivos. Não usa frases clichê como "produto de alta qualidade" ou "não perca essa oportunidade". Em vez disso, você mostra o valor real do produto de forma concreta.
 
-**Produto:** ${data.title}
-**Categoria:** ${data.category}
-**Marketplace:** ${mp.name}
-**Marca:** ${data.brand || "Genérico"}
-**Descrição do vendedor:** ${data.description || "Produto de qualidade para uso cotidiano"}
-**Preço final:** R$ ${(data.finalPrice || 0).toFixed(2)}
+PRODUTO PARA ANUNCIAR:
+- Nome: ${data.title}
+- Categoria: ${data.category}
+- Marketplace: ${mp.name}
+- Marca: ${data.brand || "sem marca específica"}
+- Informações do vendedor: ${data.description || "produto para uso cotidiano"}
+- Preço: R$ ${(data.finalPrice || 0).toFixed(2)}
 
-Retorne APENAS um JSON válido (sem markdown) com esta estrutura exata:
+REGRAS DE COPYWRITING QUE VOCÊ DEVE SEGUIR:
+
+TÍTULO:
+- Máximo 100 caracteres
+- Comece com a palavra mais buscada (substantivo principal do produto)
+- Inclua: o que é + principal benefício ou característica diferenciadora + variação mais procurada (cor, tamanho, material) se aplicável
+- Sem emojis, sem caps lock, sem pontuação desnecessária
+- Exemplo de bom título: "Luminária LED de mesa recarregável via USB com regulagem de brilho"
+
+DESCRIÇÃO (escreva corrido, em parágrafos naturais, 250-350 palavras):
+- Primeiro parágrafo (gancho): comece pelo PROBLEMA que o produto resolve ou pela situação em que ele é perfeito. Nada de "apresentamos o produto X". Fale direto com o comprador.
+- Segundo parágrafo: descreva o produto de forma concreta — materiais, dimensões, como funciona — mas de jeito humano, não técnico frio.
+- Terceiro parágrafo: mostre o produto em uso real. "Imagine chegar em casa depois de um dia longo e...". Crie identificação.
+- Quarto parágrafo: quebre objeções. Antecipe a dúvida mais comum de quem está na dúvida entre comprar e não comprar, e responda.
+- Fechamento: CTA natural, sem gritar. Algo como "Simples assim." ou "É só escolher a cor e a gente cuida do resto."
+- NÃO use listas com travessão nessa seção. Parágrafos corridos.
+- NÃO use palavras como: incrível, sensacional, imperdível, top, perfeito, revolucionário, exclusivo
+
+BENEFÍCIOS (lista separada, 5 itens):
+- Cada benefício deve começar com o RESULTADO, não com a característica
+- Ruim: "Material resistente"
+- Bom: "Aguenta o uso diário sem deformar — testamos por 6 meses"
+- Ruim: "Fácil de usar"
+- Bom: "Qualquer pessoa monta em menos de 2 minutos, sem manual"
+
+PALAVRAS-CHAVE:
+- Primárias (5): termos exatos que o comprador digita ao buscar esse produto no ${mp.name}
+- Secundárias (8): variações, sinônimos, usos, contextos relacionados
+
+VARIAÇÕES:
+- Sugira 3 variações de produto (cor, tamanho, versão) que fariam sentido comercialmente
+
+DICA DO MARKETPLACE:
+- Uma dica prática e específica sobre como se destacar no ${mp.name} com esse tipo de produto. Baseada em como o algoritmo e os compradores dessa plataforma se comportam.
+
+Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com esta estrutura:
 {
-  "titulo_otimizado": "título SEO com até 100 chars, inclua palavras-chave naturais",
-  "descricao": "descrição persuasiva de 200-300 palavras com benefícios, características e CTA",
-  "beneficios": ["benefício 1", "benefício 2", "benefício 3", "benefício 4", "benefício 5"],
-  "palavras_chave_primarias": ["kw1", "kw2", "kw3", "kw4", "kw5"],
-  "palavras_chave_secundarias": ["kw6", "kw7", "kw8", "kw9", "kw10"],
-  "variacoes_sugeridas": ["variação A", "variação B", "variação C"],
-  "dica_marketplace": "dica específica para ${mp.name} sobre como se destacar nessa plataforma"
+  "titulo_otimizado": "...",
+  "descricao": "...",
+  "beneficios": ["...", "...", "...", "...", "..."],
+  "palavras_chave_primarias": ["...", "...", "...", "...", "..."],
+  "palavras_chave_secundarias": ["...", "...", "...", "...", "...", "...", "...", "..."],
+  "variacoes_sugeridas": ["...", "...", "..."],
+  "dica_marketplace": "..."
 }`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/generateAd", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 2000,
           messages: [{ role: "user", content: prompt }],
         }),
       });
@@ -1119,9 +1155,13 @@ Retorne APENAS um JSON válido (sem markdown) com esta estrutura exata:
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div className="spinner" />
             <div>
-              <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>Gerando seu anúncio...</div>
+              <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>Criando seu anúncio...</div>
               <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginTop: 2 }}>
-                {progress < 30 ? "Analisando produto e marketplace..." : progress < 60 ? "Criando título SEO otimizado..." : "Escrevendo descrição persuasiva..."}
+                {progress < 20 ? "Analisando produto e público-alvo..." :
+                 progress < 40 ? "Elaborando título com palavras-chave estratégicas..." :
+                 progress < 60 ? "Escrevendo descrição em linguagem natural de vendas..." :
+                 progress < 80 ? "Refinando benefícios e gatilhos de conversão..." :
+                 "Finalizando palavras-chave e dicas do marketplace..."}
               </div>
             </div>
           </div>
@@ -1159,11 +1199,17 @@ Retorne APENAS um JSON válido (sem markdown) com esta estrutura exata:
             {/* Description */}
             <div className="ai-block">
               <div className="ai-block-header">
-                <div className="ai-block-title"><span>📝</span> Descrição persuasiva</div>
+                <div className="ai-block-title"><span>📝</span> Descrição</div>
                 <CopyButton text={ad.descricao} />
               </div>
-              <div className="ai-block-body" style={{ whiteSpace: "pre-wrap" }}>
-                <TypingText text={ad.descricao} speed={6} />
+              <div className="ai-block-body">
+                {ad.descricao
+                  ? ad.descricao.split(/\n+/).filter(Boolean).map((para, i) => (
+                      <p key={i} style={{ marginBottom: i < ad.descricao.split(/\n+/).filter(Boolean).length - 1 ? "14px" : 0, lineHeight: 1.75 }}>
+                        {i === 0 ? <TypingText text={para} speed={5} /> : para}
+                      </p>
+                    ))
+                  : null}
               </div>
             </div>
 
