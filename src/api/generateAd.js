@@ -1,4 +1,8 @@
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
     const { prompt } = req.body;
 
@@ -11,7 +15,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-3-sonnet-20240229",
-        max_tokens: 2000,
+        max_tokens: 1000,
         messages: [
           {
             role: "user",
@@ -23,9 +27,9 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    res.status(200).json(data);
+    return res.status(200).json(data);
 
   } catch (error) {
-    res.status(500).json({ error: "Erro ao gerar anúncio" });
+    return res.status(500).json({ error: "Erro ao gerar anúncio" });
   }
 }
