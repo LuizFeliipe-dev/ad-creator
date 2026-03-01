@@ -1109,28 +1109,35 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com est
 }`;
 
     try {
-      const res = await fetch("/api/generateAd", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ prompt })
-})
-      const json = await res.json();
-      clearInterval(progressInterval);
-      setProgress(100);
+  const res = await fetch("/api/generateAd", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ prompt })
+  });
 
-      const text = json.content?.map(b => b.text || "").join("");
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      setAd(parsed);
-      setLoading(false);
-    } catch (e) {
-      clearInterval(progressInterval);
-      setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
-      setLoading(false);
-    }
-  };
+  const json = await res.json();
+
+  clearInterval(progressInterval);
+  setProgress(100);
+
+  const text = json.candidates?.[0]?.content?.parts
+    ?.map(p => p.text || "")
+    .join("");
+
+  const clean = text.replace(/```json|```/g, "").trim();
+
+  const parsed = JSON.parse(clean);
+
+  setAd(parsed);
+  setLoading(false);
+
+} catch (e) {
+  clearInterval(progressInterval);
+  setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
+  setLoading(false);
+}
 
   const copyField = (key, text) => {
     navigator.clipboard.writeText(text).catch(() => {});
