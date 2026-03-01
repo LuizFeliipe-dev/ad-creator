@@ -1137,7 +1137,7 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com est
   clearInterval(progressInterval);
   setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
   setLoading(false);
-}
+}};
 
   const copyField = (key, text) => {
     navigator.clipboard.writeText(text).catch(() => {});
