@@ -153,6 +153,7 @@ const styles = `
     background: var(--paper);
     color: var(--ink);
     min-height: 100vh;
+    width: 100%;
     -webkit-font-smoothing: antialiased;
   }
 
