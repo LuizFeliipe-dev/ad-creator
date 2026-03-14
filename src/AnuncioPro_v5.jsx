@@ -1,125 +1,265 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-// ─── MARKETPLACE DATA ───────────────────────────────────────────────────────
+// ─── MARKETPLACE DATA ────────────────────────────────────────────────────────
+//
+// SHOPEE 2026 — fonte: planilha Primos Center + artigo oficial seller.shopee.com.br
+// Modelo: comissão base % + adicional frete % + adicional campanha % + taxa fixa R$/item
+// A comissão base é IGUAL para CPF e CNPJ (20%).
+// A diferença CPF vs CNPJ está nos programas disponíveis e na taxa fixa por item
+// (que na prática também é R$4,00 para ambos em 2026 — campo separado para controle futuro).
+// O campo cpf450 identifica CPF com 450+ pedidos em 90 dias → taxa fixa reduzida.
+//
+const SHOPEE_RATES = {
+  commissionBase:      0.20,   // 20% — igual CPF e CNPJ
+  freightExtra:        0.06,   // +6% quando participa Frete Grátis / Shopee Express
+  campaignExtra:       0.025,  // +2,5% quando participa Campanha Destaque
+  fixedFee: {
+    cpf:               4.00,   // taxa fixa padrão CPF
+    cpf450:            4.00,   // CPF com 450+ pedidos/90d (mesmo valor em 2026, campo separado)
+    cnpj:              4.00,   // taxa fixa CNPJ
+  },
+};
+
 const MARKETPLACES = {
   shopee: {
     id: "shopee",
     name: "Shopee",
-    emoji: "🟠",
     color: "#EE4D2D",
-    categories: {
-      "Casa & Decoração": { cpf: 0.14, cnpj: 0.16 },
-      "Eletrônicos": { cpf: 0.12, cnpj: 0.14 },
-      "Moda & Acessórios": { cpf: 0.13, cnpj: 0.15 },
-      "Beleza & Cuidados": { cpf: 0.14, cnpj: 0.16 },
-      "Brinquedos & Hobbies": { cpf: 0.13, cnpj: 0.15 },
-      "Esporte & Lazer": { cpf: 0.12, cnpj: 0.14 },
-      "Alimentos & Bebidas": { cpf: 0.10, cnpj: 0.12 },
-      "Outros": { cpf: 0.14, cnpj: 0.16 },
-    },
-    fixedFee: 2.00,
-    freightProgram: { participates: true, cost: 0.10, label: "Shopee Envios" },
-    paymentFee: 0.019,
-    notes: "Comissão varia por categoria. CNPJ tem alíquota maior.",
+    // Shopee não diferencia categoria na comissão base — é sempre 20%
+    // Mantemos categorias apenas para organização/SEO do anúncio
+    commissionRate: SHOPEE_RATES.commissionBase,
+    freightExtra:   SHOPEE_RATES.freightExtra,
+    campaignExtra:  SHOPEE_RATES.campaignExtra,
+    fixedFee:       SHOPEE_RATES.fixedFee,      // objeto com cpf / cpf450 / cnpj
+    freightProgram: { label: "Frete Grátis / Shopee Express" },
+    notes: "Comissão base 20% igual para CPF e CNPJ. Taxa fixa R$ 4,00/item. Adicional de 6% ao participar do Frete Grátis / Shopee Express.",
   },
   mercadolivre: {
     id: "mercadolivre",
     name: "Mercado Livre",
-    emoji: "🟡",
     color: "#FFE600",
     categories: {
-      "Casa & Decoração": { cpf: 0.11, cnpj: 0.13 },
-      "Eletrônicos": { cpf: 0.10, cnpj: 0.12 },
-      "Moda & Acessórios": { cpf: 0.12, cnpj: 0.14 },
-      "Beleza & Cuidados": { cpf: 0.11, cnpj: 0.13 },
-      "Brinquedos & Hobbies": { cpf: 0.11, cnpj: 0.13 },
-      "Esporte & Lazer": { cpf: 0.10, cnpj: 0.12 },
-      "Alimentos & Bebidas": { cpf: 0.09, cnpj: 0.11 },
-      "Outros": { cpf: 0.11, cnpj: 0.13 },
+      "Casa & Decoração":   { cpf: 0.11, cnpj: 0.13 },
+      "Eletrônicos":        { cpf: 0.10, cnpj: 0.12 },
+      "Moda & Acessórios":  { cpf: 0.12, cnpj: 0.14 },
+      "Beleza & Cuidados":  { cpf: 0.11, cnpj: 0.13 },
+      "Brinquedos & Hobbies":{ cpf: 0.11, cnpj: 0.13 },
+      "Esporte & Lazer":    { cpf: 0.10, cnpj: 0.12 },
+      "Alimentos & Bebidas":{ cpf: 0.09, cnpj: 0.11 },
+      "Outros":             { cpf: 0.11, cnpj: 0.13 },
     },
-    fixedFee: 0,
-    freightProgram: { participates: true, cost: 0.08, label: "ML Envios Full" },
+    fixedFeeFlat: 0,
+    freightProgram: { label: "ML Envios Full", cost: 0.08 },
     paymentFee: 0.029,
-    notes: "Anúncio Clássico (11%) ou Premium (16%). Aqui usamos Clássico.",
+    notes: "Anúncio Clássico. Comissão varia por categoria.",
   },
   amazon: {
     id: "amazon",
     name: "Amazon",
-    emoji: "🔶",
     color: "#FF9900",
     categories: {
-      "Casa & Decoração": { cpf: 0.15, cnpj: 0.15 },
-      "Eletrônicos": { cpf: 0.08, cnpj: 0.08 },
-      "Moda & Acessórios": { cpf: 0.17, cnpj: 0.17 },
-      "Beleza & Cuidados": { cpf: 0.15, cnpj: 0.15 },
-      "Brinquedos & Hobbies": { cpf: 0.12, cnpj: 0.12 },
-      "Esporte & Lazer": { cpf: 0.15, cnpj: 0.15 },
-      "Alimentos & Bebidas": { cpf: 0.08, cnpj: 0.08 },
-      "Outros": { cpf: 0.15, cnpj: 0.15 },
+      "Casa & Decoração":   { cpf: 0.15, cnpj: 0.15 },
+      "Eletrônicos":        { cpf: 0.08, cnpj: 0.08 },
+      "Moda & Acessórios":  { cpf: 0.17, cnpj: 0.17 },
+      "Beleza & Cuidados":  { cpf: 0.15, cnpj: 0.15 },
+      "Brinquedos & Hobbies":{ cpf: 0.12, cnpj: 0.12 },
+      "Esporte & Lazer":    { cpf: 0.15, cnpj: 0.15 },
+      "Alimentos & Bebidas":{ cpf: 0.08, cnpj: 0.08 },
+      "Outros":             { cpf: 0.15, cnpj: 0.15 },
     },
-    fixedFee: 2.00,
-    freightProgram: { participates: true, cost: 0.12, label: "FBA Amazon" },
+    fixedFeeFlat: 2.00,
+    freightProgram: { label: "FBA Amazon", cost: 0.12 },
     paymentFee: 0.025,
     notes: "Taxa de referência por categoria. Não diferencia CPF/CNPJ.",
   },
   magalu: {
     id: "magalu",
     name: "Magalu",
-    emoji: "🔵",
     color: "#0086FF",
     categories: {
-      "Casa & Decoração": { cpf: 0.12, cnpj: 0.12 },
-      "Eletrônicos": { cpf: 0.10, cnpj: 0.10 },
-      "Moda & Acessórios": { cpf: 0.14, cnpj: 0.14 },
-      "Beleza & Cuidados": { cpf: 0.12, cnpj: 0.12 },
-      "Brinquedos & Hobbies": { cpf: 0.12, cnpj: 0.12 },
-      "Esporte & Lazer": { cpf: 0.12, cnpj: 0.12 },
-      "Alimentos & Bebidas": { cpf: 0.10, cnpj: 0.10 },
-      "Outros": { cpf: 0.12, cnpj: 0.12 },
+      "Casa & Decoração":   { cpf: 0.12, cnpj: 0.12 },
+      "Eletrônicos":        { cpf: 0.10, cnpj: 0.10 },
+      "Moda & Acessórios":  { cpf: 0.14, cnpj: 0.14 },
+      "Beleza & Cuidados":  { cpf: 0.12, cnpj: 0.12 },
+      "Brinquedos & Hobbies":{ cpf: 0.12, cnpj: 0.12 },
+      "Esporte & Lazer":    { cpf: 0.12, cnpj: 0.12 },
+      "Alimentos & Bebidas":{ cpf: 0.10, cnpj: 0.10 },
+      "Outros":             { cpf: 0.12, cnpj: 0.12 },
     },
-    fixedFee: 0,
-    freightProgram: { participates: true, cost: 0.09, label: "Magalu Entregas" },
+    fixedFeeFlat: 0,
+    freightProgram: { label: "Magalu Entregas", cost: 0.09 },
     paymentFee: 0.02,
     notes: "Marketplace consolidado. Boas taxas para eletrônicos.",
   },
 };
 
-const CATEGORIES = Object.keys(MARKETPLACES.shopee.categories);
+const CATEGORIES = [
+  "Casa & Decoração",
+  "Eletrônicos",
+  "Moda & Acessórios",
+  "Beleza & Cuidados",
+  "Brinquedos & Hobbies",
+  "Esporte & Lazer",
+  "Alimentos & Bebidas",
+  "Outros",
+];
 
-// ─── PRICING CALCULATOR ─────────────────────────────────────────────────────
-function calculatePrice({ cost, margin, marketplace, category, sellerType, useFreight }) {
+// ─── FRETE & EMBALAGEM ───────────────────────────────────────────────────────
+// Tabela de custo de embalagem estimado por faixa de peso (em gramas)
+const PACKAGING_COST_TABLE = [
+  { maxWeight: 200,  cost: 1.50,  label: "Envelope plástico pequeno" },
+  { maxWeight: 500,  cost: 2.50,  label: "Envelope plástico médio" },
+  { maxWeight: 1000, cost: 4.00,  label: "Caixa pequena + proteção" },
+  { maxWeight: 2000, cost: 6.50,  label: "Caixa média + proteção" },
+  { maxWeight: 5000, cost: 10.00, label: "Caixa grande + proteção" },
+  { maxWeight: 99999,cost: 15.00, label: "Embalagem especial" },
+];
+
+// Custo de envio estimado pelos Correios (PAC) por peso e maior dimensão
+// Fonte: tabela PAC 2024, faixa nacional média
+const CORREIOS_PAC_TABLE = [
+  { maxWeight: 300,  baseCost: 15.90 },
+  { maxWeight: 500,  baseCost: 17.50 },
+  { maxWeight: 1000, baseCost: 21.00 },
+  { maxWeight: 2000, baseCost: 26.50 },
+  { maxWeight: 3000, baseCost: 31.00 },
+  { maxWeight: 5000, baseCost: 38.00 },
+  { maxWeight: 10000,baseCost: 52.00 },
+  { maxWeight: 20000,baseCost: 74.00 },
+  { maxWeight: 30000,baseCost: 98.00 },
+];
+
+// Cubagem: peso cubado = (C × L × A) / 6000 (padrão Correios, em cm e gramas)
+function calcCubicWeight(length, width, height) {
+  if (!length || !width || !height) return 0;
+  return (length * width * height) / 6;  // resultado em gramas (÷6000 × 1000)
+}
+
+function calcShippingAndPackaging({ weightG, length, width, height }) {
+  if (!weightG || weightG <= 0) return null;
+
+  const cubicWeight = calcCubicWeight(length, width, height);
+  const billedWeight = Math.max(weightG, cubicWeight);
+
+  // Embalagem
+  const pkg = PACKAGING_COST_TABLE.find(p => billedWeight <= p.maxWeight)
+    || PACKAGING_COST_TABLE[PACKAGING_COST_TABLE.length - 1];
+
+  // Frete PAC (usado quando NÃO participa do programa do marketplace)
+  const shipping = CORREIOS_PAC_TABLE.find(p => billedWeight <= p.maxWeight)
+    || CORREIOS_PAC_TABLE[CORREIOS_PAC_TABLE.length - 1];
+
+  return {
+    weightG,
+    cubicWeight: Math.round(cubicWeight),
+    billedWeight: Math.round(billedWeight),
+    packagingCost: pkg.cost,
+    packagingLabel: pkg.label,
+    shippingCost: shipping.baseCost,
+    totalLogisticsCost: pkg.cost + shipping.baseCost,
+  };
+}
+
+// ─── PRICING CALCULATOR ──────────────────────────────────────────────────────
+// Shopee 2026 — fonte: planilha Primos Center + seller.shopee.com.br/edu/26839
+//
+// Modelo Shopee:
+//   Taxas % = comissão base (20%) + adicional frete (6%) + adicional campanha (2,5%)
+//   Taxa fixa = R$4,00/item (CPF padrão, CPF 450+, CNPJ — iguais em 2026)
+//   NÃO há taxa de pagamento separada na Shopee (já embutida)
+//
+// Outros marketplaces: mantêm modelo anterior com categoria + paymentFee
+//
+function getShopeeRates({ sellerType, cpf450, useFreight, useCampaign }) {
+  const commissionRate = SHOPEE_RATES.commissionBase
+    + (useFreight  ? SHOPEE_RATES.freightExtra  : 0)
+    + (useCampaign ? SHOPEE_RATES.campaignExtra : 0);
+
+  let fixedFee;
+  if (sellerType === "CNPJ") fixedFee = SHOPEE_RATES.fixedFee.cnpj;
+  else if (cpf450)           fixedFee = SHOPEE_RATES.fixedFee.cpf450;
+  else                       fixedFee = SHOPEE_RATES.fixedFee.cpf;
+
+  return {
+    commissionRate,
+    fixedFee,
+    freightExtra:  useFreight  ? SHOPEE_RATES.freightExtra  : 0,
+    campaignExtra: useCampaign ? SHOPEE_RATES.campaignExtra : 0,
+  };
+}
+
+function calculatePrice({ cost, margin, marketplace, category, sellerType, cpf450 = false, useFreight = false, useCampaign = false, packagingCost = 0 }) {
   if (!cost || !margin || !marketplace || !category) return null;
   const mp = MARKETPLACES[marketplace];
-  const commissionRate = mp.categories[category]?.[sellerType === "CNPJ" ? "cnpj" : "cpf"] || 0.14;
-  const fixedFee = mp.fixedFee;
-  const paymentFee = mp.paymentFee;
-  const freightCostRate = useFreight ? mp.freightProgram.cost : 0;
-  const taxRate = sellerType === "CNPJ" ? 0.08 : 0;
-  const totalDeductionRate = commissionRate + paymentFee + freightCostRate + taxRate;
+
+  let commissionRate, fixedFee, paymentFee, freightProgramRate, freightExtra, campaignExtra;
+
+  if (marketplace === "shopee") {
+    const rates    = getShopeeRates({ sellerType, cpf450, useFreight, useCampaign });
+    commissionRate  = rates.commissionRate;
+    fixedFee        = rates.fixedFee;
+    freightExtra    = rates.freightExtra;
+    campaignExtra   = rates.campaignExtra;
+    paymentFee      = 0;   // Shopee não cobra taxa de pagamento separada
+    freightProgramRate = 0; // já embutido em commissionRate
+  } else {
+    const key       = sellerType === "CNPJ" ? "cnpj" : "cpf";
+    commissionRate  = mp.categories?.[category]?.[key] || 0.12;
+    fixedFee        = mp.fixedFeeFlat || 0;
+    paymentFee      = mp.paymentFee   || 0;
+    freightProgramRate = useFreight ? (mp.freightProgram?.cost || 0) : 0;
+    freightExtra    = 0;
+    campaignExtra   = 0;
+  }
+
+  const totalFixedCost   = cost + packagingCost;
+  const totalPercentRate = commissionRate + paymentFee + freightProgramRate;
   const targetMarginRate = margin / 100;
-  const recommendedPrice = cost / (1 - totalDeductionRate - targetMarginRate);
-  const minPrice = cost / (1 - totalDeductionRate);
+
+  // Fórmula: preço = (custos fixos + taxa fixa) / (1 - taxas% - margem%)
+  const recommendedPrice = (totalFixedCost + fixedFee) / (1 - totalPercentRate - targetMarginRate);
+  const minPrice         = (totalFixedCost + fixedFee) / (1 - totalPercentRate);
 
   const calcBreakdown = (price) => {
-    const commission = price * commissionRate;
-    const payment = price * paymentFee;
-    const freight = price * freightCostRate;
-    const tax = price * taxRate;
-    const totalDeductions = commission + payment + freight + tax + fixedFee + cost;
-    const profit = price - totalDeductions;
-    const realMargin = (profit / price) * 100;
-    return { price, commission, payment, freight, tax, fixedFee, profit, realMargin, cost };
+    const commissionAmt    = price * commissionRate;
+    const paymentAmt       = price * paymentFee;
+    const freightProgAmt   = price * freightProgramRate;
+    const totalDeductions  = commissionAmt + paymentAmt + freightProgAmt + fixedFee + totalFixedCost;
+    const profit           = price - totalDeductions;
+    const realMargin       = price > 0 ? (profit / price) * 100 : 0;
+    return {
+      price, commissionAmt, paymentAmt, freightProgAmt,
+      fixedFee, cost, packagingCost, totalFixedCost,
+      profit, realMargin,
+      // detalhamento Shopee
+      commissionBase:  marketplace === "shopee" ? price * SHOPEE_RATES.commissionBase : commissionAmt,
+      freightExtraAmt: marketplace === "shopee" ? price * freightExtra  : 0,
+      campaignAmt:     marketplace === "shopee" ? price * campaignExtra : 0,
+    };
   };
 
   const recommended = calcBreakdown(Math.ceil(recommendedPrice * 100) / 100);
-  const minimum = calcBreakdown(Math.ceil(minPrice * 100) / 100);
+  const minimum     = calcBreakdown(Math.ceil(minPrice         * 100) / 100);
+  const scenarios   = [0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20].map(f =>
+    calcBreakdown(Math.round(recommended.price * f * 100) / 100)
+  );
 
-  const scenarios = [0.85, 0.9, 0.95, 1.0, 1.05, 1.10, 1.15, 1.20].map(factor => {
-    const p = Math.round(recommended.price * factor * 100) / 100;
-    return calcBreakdown(p);
-  });
+  return {
+    recommended, minimum, scenarios,
+    commissionRate, paymentFee, freightProgramRate, fixedFee, packagingCost,
+    freightExtra, campaignExtra,
+    isShopee: marketplace === "shopee",
+  };
+}
 
-  return { recommended, minimum, scenarios, commissionRate, paymentFee, freightCostRate, taxRate };
+// ─── DIRECT BREAKDOWN (slider em tempo real) ─────────────────────────────────
+function calcBreakdownDirect({ price, cost, packagingCost = 0, commissionRate, paymentFee = 0, freightProgramRate = 0, fixedFee }) {
+  const commissionAmt  = price * commissionRate;
+  const paymentAmt     = price * paymentFee;
+  const freightProgAmt = price * freightProgramRate;
+  const profit = price - commissionAmt - paymentAmt - freightProgAmt - fixedFee - cost - packagingCost;
+  const realMargin = price > 0 ? (profit / price) * 100 : 0;
+  return { price, commissionAmt, paymentAmt, freightProgAmt, fixedFee, cost, packagingCost, profit, realMargin };
 }
 
 // ─── STYLES ─────────────────────────────────────────────────────────────────
@@ -153,7 +293,6 @@ const styles = `
     background: var(--paper);
     color: var(--ink);
     min-height: 100vh;
-    width: 100%;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -631,7 +770,10 @@ function StepMarketplace({ data, onChange, onNext }) {
         </div>
         <div className="mp-grid">
           {Object.values(MARKETPLACES).map(mp => {
-            const rate = mp.categories["Outros"]["cpf"];
+            // Shopee: comissão base 20%. Outros: menor taxa da categoria Outros CPF
+            const rate = mp.id === "shopee"
+              ? mp.commissionRate
+              : (mp.categories?.["Outros"]?.["cpf"] || 0);
             return (
               <div
                 key={mp.id}
@@ -648,30 +790,57 @@ function StepMarketplace({ data, onChange, onNext }) {
         </div>
       </div>
 
-      {selected && (
-        <div className="card fade-in">
-          <div className="card-header">
-            <div className="card-title">{MARKETPLACES[selected].name} — Visão geral</div>
-          </div>
-          <div className="alert info" style={{ marginBottom: 14 }}>
-            <span>ℹ️</span> <span>{MARKETPLACES[selected].notes}</span>
-          </div>
-          <div className="grid-3">
-            <div className="metric-card">
-              <div className="m-label">Taxa de pagamento</div>
-              <div className="m-value" style={{ fontSize: "1.15rem" }}>{fmtPct(MARKETPLACES[selected].paymentFee * 100)}</div>
+      {selected && (() => {
+        const mp = MARKETPLACES[selected];
+        const isShopee = selected === "shopee";
+        return (
+          <div className="card fade-in">
+            <div className="card-header">
+              <div className="card-title">{mp.name} — Visão geral</div>
             </div>
-            <div className="metric-card">
-              <div className="m-label">Taxa fixa por venda</div>
-              <div className="m-value" style={{ fontSize: "1.15rem" }}>{MARKETPLACES[selected].fixedFee > 0 ? fmtPos(MARKETPLACES[selected].fixedFee) : "—"}</div>
+            <div className="alert info" style={{ marginBottom: 14 }}>
+              <span>ℹ️</span> <span>{mp.notes}</span>
             </div>
-            <div className="metric-card">
-              <div className="m-label">Programa logístico</div>
-              <div className="m-value" style={{ fontSize: "0.82rem", marginTop: 6, lineHeight: 1.3 }}>{MARKETPLACES[selected].freightProgram.label}</div>
-            </div>
+
+            {isShopee ? (
+              /* Shopee: exibe as 3 taxas % + taxa fixa */
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                {[
+                  { label: "Comissão base",      value: fmtPct(SHOPEE_RATES.commissionBase * 100) },
+                  { label: "+ Frete Grátis",      value: `+${fmtPct(SHOPEE_RATES.freightExtra * 100)}` },
+                  { label: "+ Camp. Destaque",    value: `+${fmtPct(SHOPEE_RATES.campaignExtra * 100)}` },
+                  { label: "Taxa fixa / item",    value: fmtPos(SHOPEE_RATES.fixedFee.cpf) },
+                ].map(({ label, value }) => (
+                  <div key={label} className="metric-card">
+                    <div className="m-label">{label}</div>
+                    <div className="m-value" style={{ fontSize: "1.1rem" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* Outros marketplaces */
+              <div className="grid-3">
+                <div className="metric-card">
+                  <div className="m-label">Taxa de pagamento</div>
+                  <div className="m-value" style={{ fontSize: "1.15rem" }}>{fmtPct((mp.paymentFee || 0) * 100)}</div>
+                </div>
+                <div className="metric-card">
+                  <div className="m-label">Taxa fixa por venda</div>
+                  <div className="m-value" style={{ fontSize: "1.15rem" }}>
+                    {(mp.fixedFeeFlat || 0) > 0 ? fmtPos(mp.fixedFeeFlat) : "—"}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="m-label">Programa logístico</div>
+                  <div className="m-value" style={{ fontSize: "0.82rem", marginTop: 6, lineHeight: 1.3 }}>
+                    {mp.freightProgram?.label || "—"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn btn-primary" disabled={!selected} onClick={onNext}>
@@ -764,6 +933,95 @@ function StepProduct({ data, onChange, onNext, onBack }) {
 
       <div className="card">
         <div className="card-header">
+          <div className="card-title">Peso e dimensões</div>
+          <div className="card-subtitle">Usados para calcular o custo de embalagem e frete automaticamente</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Peso do produto (gramas) *</label>
+              <input
+                className="form-input"
+                type="number" min="1" step="1"
+                placeholder="Ex: 350"
+                value={data.weightG || ""}
+                onChange={e => onChange({ weightG: parseFloat(e.target.value) || 0 })}
+              />
+              <span className="form-hint">Peso somente do produto, sem embalagem</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Custo extra de embalagem (R$)</label>
+              <input
+                className="form-input"
+                type="number" min="0" step="0.10"
+                placeholder="Calculado automaticamente"
+                value={data.packagingCostOverride != null ? data.packagingCostOverride : ""}
+                onChange={e => onChange({ packagingCostOverride: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })}
+              />
+              <span className="form-hint">Deixe vazio para calcular pelo peso</span>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Comprimento (cm)</label>
+              <input className="form-input" type="number" min="1" step="0.5" placeholder="Ex: 20" value={data.dimLength || ""} onChange={e => onChange({ dimLength: parseFloat(e.target.value) || 0 })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Largura (cm)</label>
+              <input className="form-input" type="number" min="1" step="0.5" placeholder="Ex: 15" value={data.dimWidth || ""} onChange={e => onChange({ dimWidth: parseFloat(e.target.value) || 0 })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Altura (cm)</label>
+              <input className="form-input" type="number" min="1" step="0.5" placeholder="Ex: 10" value={data.dimHeight || ""} onChange={e => onChange({ dimHeight: parseFloat(e.target.value) || 0 })} />
+            </div>
+          </div>
+          {/* Preview do cálculo em tempo real */}
+          {data.weightG > 0 && (() => {
+            const ship = calcShippingAndPackaging({
+              weightG: data.weightG,
+              length: data.dimLength, width: data.dimWidth, height: data.dimHeight
+            });
+            if (!ship) return null;
+            const pkgCost = data.packagingCostOverride != null ? data.packagingCostOverride : ship.packagingCost;
+            const isCubic = ship.cubicWeight > ship.weightG;
+            return (
+              <div style={{ background: "var(--cream)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 2 }}>
+                  Estimativa logística
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>Peso cobrado</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.95rem" }}>
+                      {ship.billedWeight}g
+                      {isCubic && <span style={{ fontSize: "0.65rem", color: "var(--orange)", marginLeft: 4 }}>cubado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>Embalagem sugerida</div>
+                    <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--ink)" }}>{ship.packagingLabel}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>Custo de embalagem</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.95rem", color: "var(--orange)" }}>
+                      {fmtPos(pkgCost)}
+                    </div>
+                  </div>
+                </div>
+                {!data.useFreight && (
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Frete PAC estimado (sem programa):</span>
+                    <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, color: "var(--ink)" }}>{fmtPos(ship.shippingCost)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
           <div className="card-title">Dados financeiros e logísticos</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -789,24 +1047,132 @@ function StepProduct({ data, onChange, onNext, onBack }) {
               <div className="range-labels"><span>5%</span><span>25%</span><span>50%</span><span>80%</span></div>
             </div>
           </div>
+
+          {/* Tipo de vendedor */}
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Tipo de vendedor</label>
               <div className="toggle-group">
                 {["CPF", "CNPJ"].map(t => (
-                  <div key={t} className={`toggle-btn ${(data.sellerType || "CPF") === t ? "active" : ""}`} onClick={() => onChange({ sellerType: t })}>{t}</div>
+                  <div key={t} className={`toggle-btn ${(data.sellerType || "CPF") === t ? "active" : ""}`}
+                    onClick={() => onChange({ sellerType: t, cpf450: false })}>
+                    {t}
+                  </div>
                 ))}
               </div>
             </div>
+
+            {/* CPF 450+ — só aparece se for CPF */}
+            {(data.sellerType || "CPF") === "CPF" && (
+              <div className="form-group">
+                <label className="form-label">CPF com 450+ pedidos em 90 dias?</label>
+                <div className="toggle-group">
+                  <div className={`toggle-btn ${data.cpf450 ? "active" : ""}`}
+                    onClick={() => onChange({ cpf450: true })}>
+                    ✓ Sim, 450+ pedidos
+                  </div>
+                  <div className={`toggle-btn ${!data.cpf450 ? "active" : ""}`}
+                    onClick={() => onChange({ cpf450: false })}>
+                    Não
+                  </div>
+                </div>
+                <span className="form-hint">Altera a taxa fixa por item. Verifique no painel da Shopee.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Programas — só aparecem se for Shopee */}
+          {(data.marketplace === "shopee") && (
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Frete Grátis / Shopee Express?</label>
+                <div className="toggle-group">
+                  <div className={`toggle-btn ${data.useFreight ? "active" : ""}`}
+                    onClick={() => onChange({ useFreight: true })}>
+                    ✓ Participo (+6%)
+                  </div>
+                  <div className={`toggle-btn ${!data.useFreight ? "active" : ""}`}
+                    onClick={() => onChange({ useFreight: false })}>
+                    Não participo
+                  </div>
+                </div>
+                <span className="form-hint">
+                  {data.useFreight
+                    ? "Adicional de 6% sobre o preço de venda cobrado pela Shopee."
+                    : "Frete cobrado do comprador separadamente."}
+                </span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Campanha Destaque?</label>
+                <div className="toggle-group">
+                  <div className={`toggle-btn ${data.useCampaign ? "active" : ""}`}
+                    onClick={() => onChange({ useCampaign: true })}>
+                    ✓ Participo (+2,5%)
+                  </div>
+                  <div className={`toggle-btn ${!data.useCampaign ? "active" : ""}`}
+                    onClick={() => onChange({ useCampaign: false })}>
+                    Não participo
+                  </div>
+                </div>
+                <span className="form-hint">
+                  {data.useCampaign
+                    ? "Adicional de 2,5% cobrado durante campanhas de destaque."
+                    : "Sem cobrança adicional de campanha."}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Para outros marketplaces: toggle de frete simples */}
+          {(data.marketplace !== "shopee") && (
             <div className="form-group">
-              <label className="form-label">Participar de programa de frete?</label>
+              <label className="form-label">Participar do programa de frete do marketplace?</label>
               <div className="toggle-group">
                 <div className={`toggle-btn ${data.useFreight ? "active" : ""}`} onClick={() => onChange({ useFreight: true })}>Sim, frete grátis</div>
                 <div className={`toggle-btn ${!data.useFreight ? "active" : ""}`} onClick={() => onChange({ useFreight: false })}>Não participar</div>
               </div>
-              <span className="form-hint">{data.useFreight ? `Custo absorvido: ${fmtPct(MARKETPLACES[data.marketplace || "shopee"].freightProgram.cost * 100)} do preço` : "Frete cobrado separado"}</span>
             </div>
-          </div>
+          )}
+
+          {/* Resumo das taxas em tempo real */}
+          {data.marketplace === "shopee" && data.cost > 0 && (() => {
+            const st = data.sellerType || "CPF";
+            const rates = getShopeeRates({ sellerType: st, cpf450: data.cpf450 || false, useFreight: data.useFreight || false, useCampaign: data.useCampaign || false });
+            const totalPct = rates.commissionRate * 100;
+            return (
+              <div style={{ background: "#fff3f0", border: "1.5px solid #ffc4a8", borderRadius: "var(--radius-sm)", padding: "14px 16px" }}>
+                <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--orange)", marginBottom: 10 }}>
+                  📊 Resumo das taxas Shopee ({st}{data.cpf450 && st === "CPF" ? " · 450+ pedidos" : ""})
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, fontSize: "0.78rem" }}>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" }}>Comissão base</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800 }}>20,0%</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" }}>+ Frete Grátis</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, color: data.useFreight ? "var(--orange)" : "var(--muted)" }}>
+                      {data.useFreight ? "+6,0%" : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" }}>+ Campanha</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, color: data.useCampaign ? "var(--orange)" : "var(--muted)" }}>
+                      {data.useCampaign ? "+2,5%" : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" }}>Taxa fixa/item</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800 }}>R$ {rates.fixedFee.toFixed(2)}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #ffc4a8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Total % incidente sobre o preço de venda:</span>
+                  <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "var(--orange)" }}>{totalPct.toFixed(1)}%</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -820,26 +1186,26 @@ function StepProduct({ data, onChange, onNext, onBack }) {
   );
 }
 
-// ─── DIRECT BREAKDOWN (não usa calculatePrice para evitar bugs) ──────────────
-function calcBreakdownDirect({ price, cost, commissionRate, paymentFee, freightCostRate, taxRate, fixedFee }) {
-  const commission = price * commissionRate;
-  const payment    = price * paymentFee;
-  const freight    = price * freightCostRate;
-  const tax        = price * taxRate;
-  const profit     = price - commission - payment - freight - tax - fixedFee - cost;
-  const realMargin = (profit / price) * 100;
-  return { price, commission, payment, freight, tax, fixedFee, cost, profit, realMargin };
-}
-
 // ─── STEP 3: PRICING ─────────────────────────────────────────────────────────
 function StepPricing({ data, onChange, onNext, onBack }) {
+  const shipCalc = calcShippingAndPackaging({
+    weightG: data.weightG, length: data.dimLength,
+    width: data.dimWidth,  height: data.dimHeight,
+  });
+  const packagingCost = data.packagingCostOverride != null
+    ? data.packagingCostOverride
+    : (shipCalc?.packagingCost || 0);
+
   const result = calculatePrice({
-    cost: data.cost,
-    margin: data.margin || 25,
+    cost:        data.cost,
+    margin:      data.margin      || 25,
     marketplace: data.marketplace,
-    category: data.category,
-    sellerType: data.sellerType || "CPF",
-    useFreight: data.useFreight,
+    category:    data.category,
+    sellerType:  data.sellerType  || "CPF",
+    cpf450:      data.cpf450      || false,
+    useFreight:  data.useFreight  || false,
+    useCampaign: data.useCampaign || false,
+    packagingCost,
   });
   const mp = MARKETPLACES[data.marketplace];
 
@@ -847,23 +1213,69 @@ function StepPricing({ data, onChange, onNext, onBack }) {
 
   const rec = result.recommended;
   const min = result.minimum;
-
-  // Preço que o usuário está simulando no slider — default = recomendado
   const chosenPrice = data.chosenPrice != null ? data.chosenPrice : rec.price;
 
-  // Breakdown DIRETO para o preço escolhido no slider (sem recalcular via calculatePrice)
   const sliderBreakdown = calcBreakdownDirect({
-    price: chosenPrice,
-    cost: data.cost,
-    commissionRate: result.commissionRate,
-    paymentFee:     result.paymentFee,
-    freightCostRate: result.freightCostRate,
-    taxRate:         result.taxRate,
-    fixedFee:        mp.fixedFee,
+    price:              chosenPrice,
+    cost:               data.cost,
+    packagingCost,
+    commissionRate:     result.commissionRate,
+    paymentFee:         result.paymentFee,
+    freightProgramRate: result.freightProgramRate,
+    fixedFee:           result.fixedFee,
   });
 
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Logistics summary bar — shown when weight is filled */}
+      {shipCalc && (
+        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: "1.2rem" }}>📦</span>
+            <div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Embalagem incluída</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.9rem" }}>
+                {fmtPos(packagingCost)}
+                <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "var(--muted)", marginLeft: 6 }}>{shipCalc.packagingLabel}</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ width: 1, height: 32, background: "var(--border)", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Peso real</div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.9rem" }}>{shipCalc.weightG}g</div>
+          </div>
+          {shipCalc.cubicWeight > 0 && <>
+            <div style={{ width: 1, height: 32, background: "var(--border)", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Peso cubado</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.9rem", color: shipCalc.cubicWeight > shipCalc.weightG ? "var(--orange)" : "inherit" }}>
+                {shipCalc.cubicWeight}g
+                {shipCalc.cubicWeight > shipCalc.weightG && <span style={{ fontSize: "0.65rem", marginLeft: 4, color: "var(--orange)" }}>← cobrado</span>}
+              </div>
+            </div>
+          </>}
+          {!data.useFreight && <>
+            <div style={{ width: 1, height: 32, background: "var(--border)", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Frete PAC estimado</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: "0.9rem", color: "var(--red)" }}>{fmtPos(shipCalc.shippingCost)}</div>
+            </div>
+          </>}
+          <div style={{ marginLeft: "auto", background: "var(--green-pale)", border: "1px solid #a8e8c6", borderRadius: "var(--radius-sm)", padding: "5px 12px", fontSize: "0.75rem", fontWeight: 700, color: "var(--green)" }}>
+            ✓ Já no preço
+          </div>
+        </div>
+      )}
+
+      {!shipCalc && (
+        <div className="alert info">
+          <span>💡</span>
+          <span>Volte à etapa anterior e preencha o <strong>peso do produto</strong> para calcular o custo de embalagem automaticamente.</span>
+        </div>
+      )}
+
       {/* Banner mostra os valores do PREÇO RECOMENDADO, explicitamente */}
       <div className="result-summary">
         <div>
@@ -936,36 +1348,58 @@ function StepPricing({ data, onChange, onNext, onBack }) {
               <span className="b-label">💰 Receita (preço de venda)</span>
               <span className="b-val">{fmtPos(sliderBreakdown.price)}</span>
             </div>
+
+            {/* Shopee: detalhamento linha a linha das taxas % */}
+            {result.isShopee ? (<>
+              <div className="breakdown-row">
+                <span className="b-label">Comissão base Shopee (20%)</span>
+                <span className="b-val neg">− {fmtPos(chosenPrice * SHOPEE_RATES.commissionBase)}</span>
+              </div>
+              {result.freightExtra > 0 && (
+                <div className="breakdown-row">
+                  <span className="b-label">Adicional Frete Grátis / Shopee Express (6%)</span>
+                  <span className="b-val neg">− {fmtPos(chosenPrice * result.freightExtra)}</span>
+                </div>
+              )}
+              {result.campaignExtra > 0 && (
+                <div className="breakdown-row">
+                  <span className="b-label">Adicional Campanha Destaque (2,5%)</span>
+                  <span className="b-val neg">− {fmtPos(chosenPrice * result.campaignExtra)}</span>
+                </div>
+              )}
+            </>) : (<>
+              <div className="breakdown-row">
+                <span className="b-label">Comissão {mp.name} ({fmtPct(result.commissionRate * 100)})</span>
+                <span className="b-val neg">− {fmtPos(sliderBreakdown.commissionAmt)}</span>
+              </div>
+              {result.paymentFee > 0 && (
+                <div className="breakdown-row">
+                  <span className="b-label">Taxa de pagamento ({fmtPct(result.paymentFee * 100)})</span>
+                  <span className="b-val neg">− {fmtPos(sliderBreakdown.paymentAmt)}</span>
+                </div>
+              )}
+              {result.freightProgramRate > 0 && (
+                <div className="breakdown-row">
+                  <span className="b-label">Programa de frete ({fmtPct(result.freightProgramRate * 100)})</span>
+                  <span className="b-val neg">− {fmtPos(sliderBreakdown.freightProgAmt)}</span>
+                </div>
+              )}
+            </>)}
+
             <div className="breakdown-row">
-              <span className="b-label">Comissão {mp.name} ({fmtPct(result.commissionRate * 100)})</span>
-              <span className="b-val neg">− {fmtPos(sliderBreakdown.commission)}</span>
+              <span className="b-label">Taxa fixa por item</span>
+              <span className="b-val neg">− {fmtPos(result.fixedFee)}</span>
             </div>
-            <div className="breakdown-row">
-              <span className="b-label">Taxa de pagamento ({fmtPct(result.paymentFee * 100)})</span>
-              <span className="b-val neg">− {fmtPos(sliderBreakdown.payment)}</span>
-            </div>
-            {result.freightCostRate > 0 && (
-              <div className="breakdown-row">
-                <span className="b-label">Custo logístico ({fmtPct(result.freightCostRate * 100)})</span>
-                <span className="b-val neg">− {fmtPos(sliderBreakdown.freight)}</span>
-              </div>
-            )}
-            {result.taxRate > 0 && (
-              <div className="breakdown-row">
-                <span className="b-label">Impostos CNPJ ({fmtPct(result.taxRate * 100)})</span>
-                <span className="b-val neg">− {fmtPos(sliderBreakdown.tax)}</span>
-              </div>
-            )}
-            {mp.fixedFee > 0 && (
-              <div className="breakdown-row">
-                <span className="b-label">Taxa fixa por venda</span>
-                <span className="b-val neg">− {fmtPos(mp.fixedFee)}</span>
-              </div>
-            )}
             <div className="breakdown-row">
               <span className="b-label">Custo de aquisição do produto</span>
               <span className="b-val neg">− {fmtPos(data.cost)}</span>
             </div>
+            {packagingCost > 0 && (
+              <div className="breakdown-row">
+                <span className="b-label">Custo de embalagem {shipCalc ? `(${shipCalc.packagingLabel})` : ""}</span>
+                <span className="b-val neg">− {fmtPos(packagingCost)}</span>
+              </div>
+            )}
             <div className="breakdown-row total">
               <span className="b-label">= Lucro líquido real</span>
               <span className={`b-val ${sliderBreakdown.profit >= 0 ? "pos" : "neg"}`}>
@@ -1003,10 +1437,10 @@ function StepPricing({ data, onChange, onNext, onBack }) {
         </div>
       </div>
 
-      {data.sellerType === "CNPJ" && (
+      {data.sellerType === "CNPJ" && data.marketplace === "shopee" && (
         <div className="alert warn">
           <span>⚠️</span>
-          <span><strong>CNPJ detectado:</strong> Impostos de 8% e comissões diferenciadas foram aplicados automaticamente. Consulte um contador para validar o regime tributário correto.</span>
+          <span><strong>CNPJ na Shopee:</strong> A comissão base (20%) é igual ao CPF. A taxa fixa por item é R$ {SHOPEE_RATES.fixedFee.cnpj.toFixed(2)}. Consulte um contador para obrigações fiscais específicas do seu regime tributário.</span>
         </div>
       )}
 
@@ -1110,35 +1544,30 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com est
 }`;
 
     try {
-  const res = await fetch("/api/generateAd", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ prompt })
-  });
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const json = await res.json();
+      clearInterval(progressInterval);
+      setProgress(100);
 
-  const json = await res.json();
-
-  clearInterval(progressInterval);
-  setProgress(100);
-
-  const text = json.candidates?.[0]?.content?.parts
-    ?.map(p => p.text || "")
-    .join("");
-
-  const clean = text.replace(/```json|```/g, "").trim();
-
-  const parsed = JSON.parse(clean);
-
-  setAd(parsed);
-  setLoading(false);
-
-} catch (e) {
-  clearInterval(progressInterval);
-  setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
-  setLoading(false);
-}};
+      const text = json.content?.map(b => b.text || "").join("");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setAd(parsed);
+      setLoading(false);
+    } catch (e) {
+      clearInterval(progressInterval);
+      setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
+      setLoading(false);
+    }
+  };
 
   const copyField = (key, text) => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -1147,10 +1576,16 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com est
   };
 
   const mp = MARKETPLACES[data.marketplace];
+  const shipCalc = calcShippingAndPackaging({ weightG: data.weightG, length: data.dimLength, width: data.dimWidth, height: data.dimHeight });
+  const packagingCost = data.packagingCostOverride != null ? data.packagingCostOverride : (shipCalc?.packagingCost || 0);
   const result = calculatePrice({
     cost: data.cost, margin: data.margin || 25,
     marketplace: data.marketplace, category: data.category,
-    sellerType: data.sellerType || "CPF", useFreight: data.useFreight,
+    sellerType:  data.sellerType  || "CPF",
+    cpf450:      data.cpf450      || false,
+    useFreight:  data.useFreight  || false,
+    useCampaign: data.useCampaign || false,
+    packagingCost,
   });
 
   return (
