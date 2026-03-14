@@ -240,9 +240,22 @@ function calculatePrice({ cost, margin, marketplace, category, sellerType, cpf45
 
   const recommended = calcBreakdown(Math.ceil(recommendedPrice * 100) / 100);
   const minimum     = calcBreakdown(Math.ceil(minPrice         * 100) / 100);
-  const scenarios   = [0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20].map(f =>
-    calcBreakdown(Math.round(recommended.price * f * 100) / 100)
-  );
+
+  // Cenários: distribuídos entre abaixo do mínimo e acima do recomendado
+  // Assim qualquer preço que o usuário escolher aparece na tabela
+  const scenarioBase = minimum.price; // ancora no mínimo, não no recomendado
+  const scenarioTop  = Math.max(recommended.price * 1.3, minimum.price * 1.5);
+  const step = (scenarioTop - scenarioBase * 0.75) / 7;
+  const scenarios = [
+    calcBreakdown(Math.round(scenarioBase * 0.75 * 100) / 100), // -25% do mínimo (prejuízo)
+    calcBreakdown(Math.round(scenarioBase * 0.90 * 100) / 100), // -10% do mínimo (prejuízo)
+    calcBreakdown(Math.round(scenarioBase          * 100) / 100), // = mínimo (lucro zero)
+    calcBreakdown(Math.round((scenarioBase + (recommended.price - scenarioBase) * 0.33) * 100) / 100),
+    calcBreakdown(Math.round((scenarioBase + (recommended.price - scenarioBase) * 0.66) * 100) / 100),
+    calcBreakdown(Math.round(recommended.price * 100) / 100),    // = recomendado (margem alvo)
+    calcBreakdown(Math.round(recommended.price * 1.15 * 100) / 100),
+    calcBreakdown(Math.round(recommended.price * 1.30 * 100) / 100),
+  ];
 
   return {
     recommended, minimum, scenarios,
@@ -1306,10 +1319,16 @@ function StepPricing({ data, onChange, onNext, onBack }) {
           </div>
 
           {/* Destaque do preço atual e lucro simulado */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, padding: "10px 14px", background: "var(--cream)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, padding: "10px 14px", background: chosenPrice < min.price ? "var(--red-pale)" : "var(--cream)", borderRadius: "var(--radius-sm)", border: `1px solid ${chosenPrice < min.price ? "#f5c0c0" : "var(--border)"}` }}>
             <div>
               <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Publicando a</div>
               <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.03em" }}>{fmtPos(chosenPrice)}</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Situação</div>
+              <div style={{ fontWeight: 700, fontSize: "0.85rem", color: chosenPrice < min.price ? "var(--red)" : chosenPrice >= rec.price ? "var(--green)" : "var(--orange)", marginTop: 4 }}>
+                {chosenPrice < min.price ? "⚠ Prejuízo" : chosenPrice >= rec.price ? "✓ Meta atingida" : "⚡ Abaixo da meta"}
+              </div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Lucro líquido</div>
@@ -1319,7 +1338,7 @@ function StepPricing({ data, onChange, onNext, onBack }) {
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>Margem real</div>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.03em", color: "var(--muted)" }}>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.03em", color: sliderBreakdown.realMargin < 0 ? "var(--red)" : "var(--muted)" }}>
                 {fmtPct(sliderBreakdown.realMargin)}
               </div>
             </div>
@@ -1329,16 +1348,16 @@ function StepPricing({ data, onChange, onNext, onBack }) {
             <input
               type="range"
               min={Math.max(1, min.price * 0.7)}
-              max={rec.price * 1.6}
+              max={Math.max(rec.price * 1.5, chosenPrice * 1.1)}
               step={0.5}
               value={chosenPrice}
               onChange={e => onChange({ chosenPrice: parseFloat(e.target.value) })}
             />
             <div className="range-labels">
-              <span>⚠ Prejuízo</span>
-              <span style={{ color: "var(--red)", fontWeight: 600 }}>Mín: {fmtPos(min.price)}</span>
-              <span style={{ color: "var(--orange)", fontWeight: 600 }}>Rec: {fmtPos(rec.price)}</span>
-              <span>{fmtPos(rec.price * 1.6)}</span>
+              <span style={{ color: "var(--red)" }}>⚠ Prejuízo</span>
+              <span style={{ color: "var(--red)", fontWeight: 700 }}>Mín: {fmtPos(min.price)}</span>
+              <span style={{ color: "var(--orange)", fontWeight: 700 }}>Rec: {fmtPos(rec.price)}</span>
+              <span style={{ color: "var(--muted)" }}>{fmtPos(Math.max(rec.price * 1.5, chosenPrice * 1.1))}</span>
             </div>
           </div>
 
@@ -1412,21 +1431,28 @@ function StepPricing({ data, onChange, onNext, onBack }) {
         <div className="card">
           <div className="card-header">
             <div className="card-title">Simulação de cenários</div>
-            <div className="card-subtitle">Compare diferentes faixas de preço</div>
+            <div className="card-subtitle">Do prejuízo à margem alvo — do preço mínimo ao recomendado</div>
           </div>
           <table className="scenario-table">
             <thead><tr><th>Preço</th><th>Lucro</th><th>Margem</th><th>Status</th></tr></thead>
             <tbody>
               {result.scenarios.map((s, i) => {
-                const isRec = Math.abs(s.price - rec.price) < 0.5;
+                const isRec     = Math.abs(s.price - rec.price) < 0.5;
+                const isMin     = Math.abs(s.price - min.price) < 0.5;
+                const isChosen  = Math.abs(s.price - chosenPrice) < 0.5;
                 return (
-                  <tr key={i} className={isRec ? "recommended-row" : ""}>
-                    <td style={{ fontWeight: 600 }}>{fmtPos(s.price)}{isRec ? " ⭐" : ""}</td>
-                    <td style={{ color: s.profit < 0 ? "var(--red)" : "var(--green)", fontWeight: 600 }}>{fmt(s.profit)}</td>
+                  <tr key={i} className={isRec ? "recommended-row" : ""} style={{ background: isChosen && !isRec ? "var(--blue-pale, #eff6ff)" : undefined }}>
+                    <td style={{ fontWeight: 600 }}>
+                      {fmtPos(s.price)}
+                      {isRec    ? " ⭐" : ""}
+                      {isMin    ? " ← mínimo" : ""}
+                      {isChosen && !isRec ? " ← atual" : ""}
+                    </td>
+                    <td style={{ color: s.profit < 0 ? "var(--red)" : s.profit < 0.5 ? "var(--gold)" : "var(--green)", fontWeight: 600 }}>{fmt(s.profit)}</td>
                     <td>{fmtPct(s.realMargin)}</td>
                     <td>
-                      <span className={`profit-pill ${s.profit < 0 ? "neg" : s.realMargin >= 20 ? "pos" : "neutral"}`}>
-                        {s.profit < 0 ? "Prejuízo" : s.realMargin >= 20 ? "Ótimo" : "Ok"}
+                      <span className={`profit-pill ${s.profit < 0 ? "neg" : s.realMargin >= 15 ? "pos" : "neutral"}`}>
+                        {s.profit < 0 ? "Prejuízo" : s.realMargin >= 15 ? "Ótimo" : "Ok"}
                       </span>
                     </td>
                   </tr>
@@ -1543,31 +1569,36 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois, com est
   "dica_marketplace": "..."
 }`;
 
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      const json = await res.json();
-      clearInterval(progressInterval);
-      setProgress(100);
+     try {
+  const res = await fetch("/api/generateAd", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ prompt })
+  });
 
-      const text = json.content?.map(b => b.text || "").join("");
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      setAd(parsed);
-      setLoading(false);
-    } catch (e) {
-      clearInterval(progressInterval);
-      setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
-      setLoading(false);
-    }
-  };
+  const json = await res.json();
+
+  clearInterval(progressInterval);
+  setProgress(100);
+
+  const text = json.candidates?.[0]?.content?.parts
+    ?.map(p => p.text || "")
+    .join("");
+
+  const clean = text.replace(/```json|```/g, "").trim();
+
+  const parsed = JSON.parse(clean);
+
+  setAd(parsed);
+  setLoading(false);
+
+} catch (e) {
+  clearInterval(progressInterval);
+  setError("Não foi possível conectar à IA. Verifique sua conexão e tente novamente.");
+  setLoading(false);
+}};
 
   const copyField = (key, text) => {
     navigator.clipboard.writeText(text).catch(() => {});
