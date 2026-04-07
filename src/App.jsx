@@ -1,4 +1,4 @@
-import AnuncioPro from "./AnuncioPro_v5";
+import AnuncioPro from "./AnuncioPro_v6";
 
 function App() {
   return <AnuncioPro />;
